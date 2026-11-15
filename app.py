@@ -63,19 +63,28 @@ def handle_chat_and_generate(
             "⚠️ Bạn chưa nhập **Gemini API Key**. "
             "Hãy dán API Key vào ô phía trên, hoặc bấm nút **Chạy thử mẫu (không cần API Key)** ở bên dưới nhé!"
         )
-        chat_display = chat_display + [[user_msg, bot_reply]]
+        chat_display = (chat_display or []) + [
+            {"role": "user", "content": user_msg},
+            {"role": "assistant", "content": bot_reply},
+        ]
         return chat_display, api_history, "", None, None, None, "⚠️ Thiếu Gemini API Key."
 
     try:
         res = analyze_request(api_key, api_history, user_msg)
     except Exception as e:
         err_msg = f"❌ Lỗi gọi Gemini API: {e}"
-        chat_display = chat_display + [[user_msg, err_msg]]
+        chat_display = (chat_display or []) + [
+            {"role": "user", "content": user_msg},
+            {"role": "assistant", "content": err_msg},
+        ]
         return chat_display, api_history, "", None, None, None, err_msg
 
     if res.get("status") == "need_clarification":
         question = res.get("clarification_question", "Bạn có thể nói rõ hơn loại biểu đồ/hàm và dữ liệu mẫu muốn dùng không?")
-        chat_display = chat_display + [[user_msg, question]]
+        chat_display = (chat_display or []) + [
+            {"role": "user", "content": user_msg},
+            {"role": "assistant", "content": question},
+        ]
         api_history = api_history + [
             {"role": "user", "content": user_msg},
             {"role": "model", "content": question},
@@ -87,7 +96,10 @@ def handle_chat_and_generate(
     steps_summary = "\n".join(f"- Bước {s['id']}: {s['narration']}" for s in plan.get("steps", []))
     bot_reply = f"✅ Đã rõ yêu cầu! Đang tạo video: **{title}**\n\n**Kịch bản:**\n{steps_summary}"
 
-    chat_display = chat_display + [[user_msg, bot_reply]]
+    chat_display = (chat_display or []) + [
+        {"role": "user", "content": user_msg},
+        {"role": "assistant", "content": bot_reply},
+    ]
     api_history = api_history + [
         {"role": "user", "content": user_msg},
         {"role": "model", "content": bot_reply},
@@ -108,7 +120,10 @@ def handle_demo(topic: str, aspect_ratio: str, voice_label: str, show_subtitles:
     res = get_demo_plan(topic)
     plan = res["plan"]
     title = plan["title"]
-    chat_display = chat_display + [[f"[Chạy thử mẫu] {title}", "✅ Đang dựng video mẫu tự động (không cần API Key)..."]]
+    chat_display = (chat_display or []) + [
+        {"role": "user", "content": f"[Chạy thử mẫu] {title}"},
+        {"role": "assistant", "content": "✅ Đang dựng video mẫu tự động (không cần API Key)..."},
+    ]
     try:
         out_mp4, out_xlsx, plan_pretty = run_video_pipeline(
             plan, aspect_ratio, voice_label, show_subtitles
