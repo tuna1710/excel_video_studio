@@ -26,9 +26,58 @@ def get_audio_duration(audio_path: str) -> float:
 
 
 async def _synthesize_one(text: str, voice: str, out_path: str) -> None:
+    clean_text = " ".join((text or "").split()).strip()
+    if not clean_text:
+        clean_text = "Bước tiếp theo."
+
     proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
-    communicate = edge_tts.Communicate(text=text, voice=voice, rate="+5%", proxy=proxy)
-    await communicate.save(out_path)
+    alt_voice = "vi-VN-NamMinhNeural" if voice != "vi-VN-NamMinhNeural" else "vi-VN-HoaiMyNeural"
+    candidates = [voice, alt_voice]
+
+    last_err = None
+    for candidate_voice in candidates:
+        for attempt in range(2):
+            try:
+                communicate = edge_tts.Communicate(
+                    text=clean_text,
+                    voice=candidate_voice,
+                    rate="+5%",
+                    proxy=proxy,
+                )
+                await communicate.save(out_path)
+                if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                    return
+            except Exception as exc:
+                last_err = exc
+                await asyncio.sleep(0.5 * (attempt + 1))
+
+    # Fallback to gTTS if Edge-TTS fails (e.g., NoAudioReceived or rate-limited IP)
+    try:
+        from gtts import gTTS
+
+        tts = gTTS(text=clean_text, lang="vi", slow=False)
+        tts.save(out_path)
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            return
+    except Exception as gtts_exc:
+        last_err = gtts_exc
+
+    # Last-resort silent audio so the pipeline never crashes
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+                "-t", "2.0", "-q:a", "9", "-acodec", "libmp3lame", out_path,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return
+    except Exception:
+        pass
+
+    raise RuntimeError(f"TTS failed: {last_err}")
 
 
 async def _synthesize_all(steps: List[Dict], voice: str, out_dir: str) -> List[Dict]:
