@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+*.mp4
+*.webm
+*.mp3
+*.wav
+*.xlsx
+.ipynb_checkpoints/
